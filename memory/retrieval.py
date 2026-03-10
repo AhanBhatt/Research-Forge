@@ -15,11 +15,18 @@ class MemoryRetrieval:
     def related_concepts(self, topic: str, limit: int = 10) -> list[str]:
         if not self.store.enabled:
             return []
+        if not self.store.has_schema(labels=["Paper", "Topic", "Concept"], rel_types=["ABOUT_TOPIC", "DISCUSSES"]):
+            return []
         rows = self.store.run_query(RELATED_CONCEPTS_QUERY, {"topic": topic, "limit": limit})
         return [row["concept"] for row in rows if row.get("concept")]
 
     def previous_hypothesis_outcomes(self, topic: str, limit: int = 10) -> list[dict[str, str]]:
         if not self.store.enabled:
+            return []
+        if not self.store.has_schema(
+            labels=["Hypothesis", "Topic", "Experiment", "Result"],
+            rel_types=["ABOUT_TOPIC", "TESTS", "PRODUCED"],
+        ):
             return []
         rows = self.store.run_query(HYPOTHESIS_OUTCOMES_QUERY, {"topic": topic, "limit": limit})
         output: list[dict[str, str]] = []

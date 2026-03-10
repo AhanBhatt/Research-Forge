@@ -31,6 +31,9 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
+    # Neo4j emits verbose schema notifications on empty/fresh graphs; keep CLI output focused.
+    logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
+    logging.getLogger("neo4j.pool").setLevel(logging.ERROR)
     args = parse_args()
     categories = [item.strip() for item in args.categories.split(",") if item.strip()]
     constraints = ResearchConstraints(

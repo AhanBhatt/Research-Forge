@@ -18,6 +18,9 @@ class Neo4jStore:
         self._enabled = settings.neo4j_enabled
         self._database = settings.neo4j_database
         self._driver = None
+        self._disabled_reason: str | None = None
+        self._label_cache: set[str] | None = None
+        self._rel_cache: set[str] | None = None
 
         if not self._enabled:
             return
@@ -35,6 +38,7 @@ class Neo4jStore:
             LOGGER.warning("Neo4j initialization failed. Memory writes are disabled: %s", exc)
             self._enabled = False
             self._driver = None
+            self._disabled_reason = str(exc)
 
     @property
     def enabled(self) -> bool:
@@ -55,7 +59,7 @@ class Neo4jStore:
                 result = session.run(query, parameters)
                 return [dict(record.data()) for record in result]
         except Exception as exc:  # pragma: no cover - runtime db failures
-            LOGGER.warning("Neo4j query failed; continuing without graph write: %s", exc)
+            self._handle_runtime_failure(exc)
             return []
 
     def bulk_write(self, statements: Iterable[tuple[str, dict[str, Any]]]) -> None:
@@ -65,8 +69,11 @@ class Neo4jStore:
             with self._driver.session(database=self._database) as session:
                 for query, params in statements:
                     session.run(query, params)
+            # Invalidate schema caches after writes.
+            self._label_cache = None
+            self._rel_cache = None
         except Exception as exc:  # pragma: no cover - runtime db failures
-            LOGGER.warning("Neo4j bulk write failed; continuing: %s", exc)
+            self._handle_runtime_failure(exc)
 
     def upsert_topic(self, topic: str) -> None:
         self.run_query(
@@ -333,3 +340,57 @@ class Neo4jStore:
                 """,
                 {"paper_id": paper_id, "value": value},
             )
+
+    def _handle_runtime_failure(self, exc: Exception) -> None:
+        message = str(exc)
+        # Database name mismatch in Aura/self-hosted setup: disable writes after first failure.
+        if "DatabaseNotFound" in message or "does not exist" in message:
+            LOGGER.warning(
+                "Neo4j database '%s' not found. Disabling graph writes for this run. "
+                "Set NEO4J_DATABASE correctly or clear Neo4j env vars to disable memory.",
+                self._database,
+            )
+            self._enabled = False
+            self._disabled_reason = message
+            return
+        LOGGER.warning("Neo4j query failed; continuing without graph write: %s", exc)
+
+    def has_schema(self, *, labels: list[str] | None = None, rel_types: list[str] | None = None) -> bool:
+        """Return whether required labels/relationship types currently exist."""
+
+        if not self.enabled:
+            return False
+        labels = labels or []
+        rel_types = rel_types or []
+        self._refresh_schema_cache()
+        if self._label_cache is None or self._rel_cache is None:
+            return False
+        return all(label in self._label_cache for label in labels) and all(rel in self._rel_cache for rel in rel_types)
+
+    def _refresh_schema_cache(self) -> None:
+        if not self.enabled:
+            return
+        if self._label_cache is not None and self._rel_cache is not None:
+            return
+        try:
+            label_rows = self.run_query("CALL db.labels()")
+            rel_rows = self.run_query("CALL db.relationshipTypes()")
+            labels: set[str] = set()
+            rels: set[str] = set()
+
+            for row in label_rows:
+                for value in row.values():
+                    if isinstance(value, str):
+                        labels.add(value)
+                        break
+            for row in rel_rows:
+                for value in row.values():
+                    if isinstance(value, str):
+                        rels.add(value)
+                        break
+            self._label_cache = labels
+            self._rel_cache = rels
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            LOGGER.warning("Neo4j schema cache refresh failed: %s", exc)
+            self._label_cache = set()
+            self._rel_cache = set()

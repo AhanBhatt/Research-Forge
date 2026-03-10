@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from memory.graph_queries import STRATEGY_HINTS_QUERY
 from schemas.strategy import StrategyMemorySnapshot, StrategyUpdate
 from tools.neo4j_store import Neo4jStore
 
@@ -20,9 +19,11 @@ class StrategyMemory:
     def load_snapshot(self, topic: str, limit: int = 8) -> StrategyMemorySnapshot:
         hints: list[str] = []
         updates: list[StrategyUpdate] = []
-        if self.neo4j_store.enabled:
-            rows = self.neo4j_store.run_query(STRATEGY_HINTS_QUERY, {"topic": topic, "limit": limit})
-            hints = [row["recommendation"] for row in rows if row.get("recommendation")]
+        if self.neo4j_store.enabled and self.neo4j_store.has_schema(
+            labels=["StrategyUpdate", "Topic"],
+            rel_types=["ABOUT_TOPIC"],
+        ):
+            hints = self.neo4j_store.fetch_strategy_hints(topic, limit=limit)
 
         local_data = self._load_local_cache().get(topic, [])
         for item in local_data[-limit:]:
