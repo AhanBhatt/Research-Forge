@@ -1,0 +1,11 @@
+pydantic==2.11.2
+pydantic-settings==2.8.1
+langgraph==0.4.7
+openai==1.75.0
+neo4j==5.28.1
+requests==2.32.3
+feedparser==6.0.11
+python-dateutil==2.9.0.post0
+streamlit==1.44.1
+pytest==8.3.5
+typing-extensions==4.13.1

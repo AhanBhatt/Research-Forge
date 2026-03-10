@@ -1,0 +1,10 @@
+topic: "LLM evaluation"
+constraints:
+  max_papers: 12
+  preferred_categories:
+    - cs.CL
+    - cs.LG
+  experiments_enabled: true
+  experiment_budget: 2
+  date_from: "2023-01-01"
+  date_to: "2026-01-01"
