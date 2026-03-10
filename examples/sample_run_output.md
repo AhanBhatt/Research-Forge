@@ -1,13 +1,13 @@
-# Sample Run Output (Illustrative)
+# Sample Run Output (Illustrative, Current)
 
 Run ID: `run_3f8d1a91b6c2`  
 Topic: `LLM evaluation`
 
 ## Summary
 - Papers ranked: 12
-- Hypotheses generated: 6
+- Hypotheses generated: 7
 - Experiments attempted: 2
-- Experiments executed: 2
+- Experiments executed: 1
 
 ## Example Hypothesis
 `hyp_a12ff40c`  
@@ -26,3 +26,7 @@ Metric deltas:
 - Predicted: `hyp_a12ff40c support_probability=0.68`
 - Observed: `outcome=supported`
 - Recommendation: `Increase confidence in this hypothesis scoring pattern.`
+
+## Notes
+- Neo4j warnings can appear on empty/new graphs and are usually non-fatal.
+- If Neo4j is optional for your workflow, disable `NEO4J_*` values in `.env`.
