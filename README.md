@@ -4,12 +4,40 @@
 
 Research Forge is a production-style MVP for automated scientific and technical research workflows across arbitrary topics (`LLM evaluation`, `graph neural networks`, `anomaly detection`, `protein folding`, `query optimization`, etc.).
 
+## UI Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="images/1.jpg" alt="Research Forge UI - Run Configuration, Retrieved Papers, Generated Hypotheses" width="100%" />
+      <br />
+      <sub><b>Run Configuration, Retrieved Papers, Generated Hypotheses</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="images/2.jpg" alt="Research Forge UI - Experiment Plans, Results, Reflection / Strategy Updates" width="100%" />
+      <br />
+      <sub><b>Experiment Plans, Results, Reflection / Strategy Updates</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="images/3.jpg" alt="Research Forge UI - Key Graph View" width="100%" />
+      <br />
+      <sub><b>Key Graph View</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <br />
+    </td>
+  </tr>
+</table>
+
 ## What It Does
 
 - Discovers papers from arXiv for a user topic
 - Extracts structured research objects from papers (not just summaries)
 - Generates and prioritizes testable hypotheses
 - Plans and runs lightweight sandboxed experiments when feasible
+- Auto-upgrades theoretical LLM plans to runnable proxy experiments for lightweight topics
 - Evaluates outcomes and updates long-term strategy memory
 - Writes Markdown and JSON run artifacts
 - Optionally persists memory in Neo4j
@@ -99,6 +127,10 @@ docs/
 5. Edit `.env`:
    - Required: `OPENAI_API_KEY`
    - Keep: `ARXIV_API_URL=https://export.arxiv.org/api/query`
+   - Optional arXiv throttling:
+     - `ARXIV_MAX_RETRIES=2`
+     - `ARXIV_BACKOFF_SECONDS=2.0`
+     - `ARXIV_MAX_RESULTS_PER_QUERY=16`
    - Neo4j is optional. Leave `NEO4J_*` empty if not using graph memory.
 
 6. Run CLI:
@@ -150,7 +182,7 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 - Uses arXiv metadata/abstracts, not full PDF parsing
 - Sandboxed execution is best-effort and intended for lightweight tests
-- Some hypotheses/experiment plans may be theoretical-only based on feasibility checks
+- Heavy domains can still produce theoretical-only plans when lightweight proxying is not appropriate
 
 ## Roadmap
 

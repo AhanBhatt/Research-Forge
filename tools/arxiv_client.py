@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from datetime import date, datetime
 from urllib.parse import urlencode
 
@@ -18,13 +19,26 @@ LOGGER = logging.getLogger(__name__)
 class ArxivClient:
     """Thin client around the arXiv Atom API."""
 
-    def __init__(self, api_url: str, timeout_seconds: int = 20) -> None:
+    def __init__(
+        self,
+        api_url: str,
+        timeout_seconds: int = 20,
+        max_retries: int = 2,
+        backoff_seconds: float = 2.0,
+        max_results_per_query: int = 16,
+    ) -> None:
         # arXiv HTTP endpoint is often blocked by local/corporate policy; prefer HTTPS.
         if api_url.startswith("http://") and "export.arxiv.org" in api_url:
             self.api_url = api_url.replace("http://", "https://", 1)
         else:
             self.api_url = api_url
         self.timeout_seconds = timeout_seconds
+        self.max_retries = max(0, max_retries)
+        self.backoff_seconds = max(0.5, backoff_seconds)
+        self.max_results_per_query = max(1, max_results_per_query)
+        self._session = requests.Session()
+        self._headers = {"User-Agent": "ResearchForge/0.1 (local research agent)"}
+        self._cooldown_until = 0.0
 
     def search(
         self,
@@ -88,22 +102,72 @@ class ArxivClient:
         date_from: date | None,
         date_to: date | None,
     ) -> list[Paper]:
+        now = time.monotonic()
+        if now < self._cooldown_until:
+            remaining = self._cooldown_until - now
+            LOGGER.warning("Skipping arXiv query during cooldown window (%.1fs remaining).", remaining)
+            return []
+
+        capped_results = min(max(1, max_results), self.max_results_per_query)
         params = {
             "search_query": query,
             "start": 0,
-            "max_results": max_results,
+            "max_results": capped_results,
             "sortBy": "lastUpdatedDate",
             "sortOrder": "descending",
         }
         url = f"{self.api_url}?{urlencode(params)}"
-        try:
-            response = requests.get(url, timeout=self.timeout_seconds)
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            LOGGER.warning("arXiv query failed: %s", exc)
-            return []
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self._session.get(url, timeout=self.timeout_seconds, headers=self._headers)
+            except requests.Timeout as exc:
+                if attempt >= self.max_retries:
+                    LOGGER.warning("arXiv query timed out after retries: %s", exc)
+                    return []
+                wait = self._compute_backoff(attempt)
+                LOGGER.warning("arXiv query timed out; retrying in %.1fs (attempt %d/%d).", wait, attempt + 1, self.max_retries)
+                time.sleep(wait)
+                continue
+            except requests.RequestException as exc:
+                LOGGER.warning("arXiv query failed: %s", exc)
+                return []
 
-        feed = feedparser.parse(response.text)
+            if response.status_code == 429:
+                wait = self._retry_after_seconds(response, attempt)
+                self._cooldown_until = max(self._cooldown_until, time.monotonic() + wait)
+                if attempt >= self.max_retries:
+                    LOGGER.warning("arXiv query failed with 429 after retries; cooling down for %.1fs.", wait)
+                    return []
+                LOGGER.warning("arXiv rate limited (429); retrying in %.1fs (attempt %d/%d).", wait, attempt + 1, self.max_retries)
+                time.sleep(wait)
+                continue
+
+            if response.status_code >= 500:
+                if attempt >= self.max_retries:
+                    LOGGER.warning("arXiv server error after retries: %s", response.status_code)
+                    return []
+                wait = self._compute_backoff(attempt)
+                LOGGER.warning("arXiv server error %s; retrying in %.1fs.", response.status_code, wait)
+                time.sleep(wait)
+                continue
+
+            try:
+                response.raise_for_status()
+            except requests.RequestException as exc:
+                LOGGER.warning("arXiv query failed: %s", exc)
+                return []
+
+            feed = feedparser.parse(response.text)
+            return self._parse_feed(feed, date_from, date_to)
+
+        return []
+
+    def _parse_feed(
+        self,
+        feed: feedparser.FeedParserDict,
+        date_from: date | None,
+        date_to: date | None,
+    ) -> list[Paper]:
         seen_ids: set[str] = set()
         papers: list[Paper] = []
 
@@ -130,6 +194,15 @@ class ArxivClient:
             papers.append(paper)
             seen_ids.add(arxiv_id)
         return papers
+
+    def _retry_after_seconds(self, response: requests.Response, attempt: int) -> float:
+        header = response.headers.get("Retry-After", "").strip()
+        if header.isdigit():
+            return min(60.0, max(1.0, float(header)))
+        return self._compute_backoff(attempt)
+
+    def _compute_backoff(self, attempt: int) -> float:
+        return min(30.0, self.backoff_seconds * (2**attempt))
 
     @staticmethod
     def _extract_pdf_url(links: list[object]) -> str | None:

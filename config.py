@@ -26,6 +26,9 @@ class Settings(BaseSettings):
 
     arxiv_api_url: str = Field(default="https://export.arxiv.org/api/query", alias="ARXIV_API_URL")
     arxiv_timeout_seconds: int = Field(default=20, alias="ARXIV_TIMEOUT_SECONDS")
+    arxiv_max_retries: int = Field(default=2, alias="ARXIV_MAX_RETRIES")
+    arxiv_backoff_seconds: float = Field(default=2.0, alias="ARXIV_BACKOFF_SECONDS")
+    arxiv_max_results_per_query: int = Field(default=16, alias="ARXIV_MAX_RESULTS_PER_QUERY")
 
     neo4j_uri: str | None = Field(default=None, alias="NEO4J_URI")
     neo4j_user: str | None = Field(default=None, alias="NEO4J_USER")

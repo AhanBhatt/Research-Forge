@@ -91,7 +91,13 @@ class ResearchForgeAgent:
         neo4j_store = Neo4jStore(self.settings)
         self.services = NodeServices(
             settings=self.settings,
-            arxiv=ArxivClient(self.settings.arxiv_api_url, timeout_seconds=self.settings.arxiv_timeout_seconds),
+            arxiv=ArxivClient(
+                self.settings.arxiv_api_url,
+                timeout_seconds=self.settings.arxiv_timeout_seconds,
+                max_retries=self.settings.arxiv_max_retries,
+                backoff_seconds=self.settings.arxiv_backoff_seconds,
+                max_results_per_query=self.settings.arxiv_max_results_per_query,
+            ),
             ranker=PaperRanker(),
             llm=LLMClient(self.settings),
             neo4j=neo4j_store,

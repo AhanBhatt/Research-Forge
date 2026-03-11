@@ -54,18 +54,26 @@ NEO4J_DATABASE=
 ### Symptom
 
 - Warnings with `arXiv query failed` and no papers retrieved.
+- Errors like `429 Too Many Requests` or `Read timed out`.
 
 ### Fix
 
 1. Ensure `.env` has:
    ```env
    ARXIV_API_URL=https://export.arxiv.org/api/query
+   ARXIV_MAX_RETRIES=2
+   ARXIV_BACKOFF_SECONDS=2.0
+   ARXIV_MAX_RESULTS_PER_QUERY=16
    ```
 2. Test connectivity:
    ```powershell
    .\.venv\Scripts\python.exe -c "import requests; print(requests.get('https://export.arxiv.org/api/query?search_query=all:llm&max_results=1',timeout=20).status_code)"
    ```
-3. If blocked, check local firewall/proxy/network policy.
+3. If you still hit `429`, lower request pressure:
+   - set `ARXIV_MAX_RESULTS_PER_QUERY=10`
+   - set `ARXIV_BACKOFF_SECONDS=4.0`
+   - temporarily reduce CLI `--max-papers` (for example `8`)
+4. If blocked entirely, check local firewall/proxy/network policy.
 
 ## 4. LLM structured parse warnings
 

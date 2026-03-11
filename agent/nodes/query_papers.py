@@ -13,7 +13,7 @@ def run(raw_state: dict, services: NodeServices) -> dict:
 
     papers, attempts = services.arxiv.search(
         topic=topic_query,
-        max_results=max(constraints.max_papers * 2, constraints.max_papers + 4),
+        max_results=min(max(constraints.max_papers + 4, constraints.max_papers), 20),
         preferred_categories=constraints.preferred_categories,
         date_from=constraints.date_from,
         date_to=constraints.date_to,
